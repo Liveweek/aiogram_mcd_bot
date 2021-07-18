@@ -3,13 +3,12 @@ from aiogram.dispatcher.filters import Text
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 from main import bot, dp, connection
-from config import ADMIN_ID, button_request_errors_text, button_request_status_text, \
+from config import button_request_errors_text, button_request_status_text, \
     button_request_rtp_text, button_request_vf_text, button_show_errors
 
 from bot_actions import generate_help_list, get_errors_list_nms, errors_keyboard
 from db_actions import get_error_stats, get_status, get_rtp_status, get_vf_status, get_current_errors, \
     update_resource_status, close_resource_status
-
 
 # TODO: Написать систему защиты от "незнакомцев" в виде декоратора (и применить его к БЛ)
 # TODO: Вынести системные параметры подключения и токенов в переменные окружения
@@ -120,8 +119,7 @@ async def show_errors(message: Message):
     await bot.send_message(
         chat_id=message.from_user.id,
         text='Процессы, завершившиеся с ошибками: \n' \
-            if errors_list else \
-            'Отсутствуют процессы, завершившиеся с ошибками. \n',
+            if errors_list else 'Отсутствуют процессы, завершившиеся с ошибками. \n',
         reply_markup=await errors_keyboard()
     )
 

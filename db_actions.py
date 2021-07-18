@@ -1,7 +1,7 @@
 from typing import List, Tuple
 
 
-def get_error_stats(conn) -> List[Tuple]:
+def get_error_stats(*, conn) -> List[Tuple]:
     """
     Получение статуса ошибок из базы данных
     :param conn: Используемое подключение к БД
@@ -36,7 +36,7 @@ def get_error_stats(conn) -> List[Tuple]:
     return cursor.fetchall()
 
 
-def get_status(conn) -> List[Tuple]:
+def get_status(*, conn) -> List[Tuple]:
     """
     Получение свежений информации о статусе процессов из базы данных
     :param conn: Используемое подключение к БД
@@ -69,7 +69,7 @@ def get_status(conn) -> List[Tuple]:
     return cursor.fetchall()
 
 
-def get_rtp_status(conn) -> List[Tuple]:
+def get_rtp_status(*, conn) -> List[Tuple]:
     """
     Получение свежей информации о краткосрочном прогнозе из Базы Данных
     :param conn: Используемое подклюение к БД
@@ -104,7 +104,7 @@ def get_rtp_status(conn) -> List[Tuple]:
     return cursor.fetchall()
 
 
-def get_vf_status(conn) -> List[Tuple]:
+def get_vf_status(*, conn) -> List[Tuple]:
     """
     Получение свежей информации о долгосрочном прогнозе из Базы данных
     :param conn: Используемое подключение к БД
@@ -139,7 +139,7 @@ def get_vf_status(conn) -> List[Tuple]:
     return cursor.fetchall()
 
 
-def get_current_errors(conn) -> List[Tuple]:
+def get_current_errors(*, conn) -> List[Tuple]:
     """
     Получение всех процессов со статусом 'E' из Базы данных
     :param conn: Используемое подключение к БД
@@ -155,7 +155,7 @@ def get_current_errors(conn) -> List[Tuple]:
     return cursor.fetchall()
 
 
-def close_resource_status(resource_nm, conn):
+def close_resource_status(*, resource_nm, conn):
     """
     Закрытие ресурса с ошибкой
     :param resource_nm: Наименование ресурса
@@ -171,7 +171,7 @@ def close_resource_status(resource_nm, conn):
     conn.commit()
 
 
-def update_resource_status(resource_nm, conn):
+def update_resource_status(*, resource_nm, conn):
     """
     Открытие ресурса с ошибкой
     :param resource_nm: Наименование ресурса

@@ -1,6 +1,7 @@
 TG_TOKEN="1819897875:AAHenY2OetQTKRLyxmWwp7_CRKNSazq15eo"
-# TG_API_URL = "https://api.telegram.org/bot"
-ADMIN_ID = 196673667
+ADMIN_IDS = [
+
+]
 button_help_text = 'Помощь'
 button_request_errors_text = 'Errors'
 button_request_status_text = 'Full stat'
