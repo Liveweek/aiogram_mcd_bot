@@ -1,7 +1,7 @@
 from typing import List, Tuple
 
 
-def get_error_stats(*, conn) -> List[Tuple]:
+def get_error_stats(*, conn, **kwargs) -> List[Tuple]:
     """
     Получение статуса ошибок из базы данных
     :param conn: Используемое подключение к БД
@@ -36,7 +36,7 @@ def get_error_stats(*, conn) -> List[Tuple]:
     return cursor.fetchall()
 
 
-def get_status(*, conn) -> List[Tuple]:
+def get_status(*, conn, **kwargs) -> List[Tuple]:
     """
     Получение свежений информации о статусе процессов из базы данных
     :param conn: Используемое подключение к БД
@@ -69,7 +69,7 @@ def get_status(*, conn) -> List[Tuple]:
     return cursor.fetchall()
 
 
-def get_rtp_status(*, conn) -> List[Tuple]:
+def get_rtp_status(*, conn, **kwargs) -> List[Tuple]:
     """
     Получение свежей информации о краткосрочном прогнозе из Базы Данных
     :param conn: Используемое подклюение к БД
@@ -101,10 +101,12 @@ def get_rtp_status(*, conn) -> List[Tuple]:
         	) t1 
         	order by start_dttm
         """)
-    return cursor.fetchall()
+    result = cursor.fetchall()
+    cursor.close()
+    return result
 
 
-def get_vf_status(*, conn) -> List[Tuple]:
+def get_vf_status(*, conn, **kwargs) -> List[Tuple]:
     """
     Получение свежей информации о долгосрочном прогнозе из Базы данных
     :param conn: Используемое подключение к БД
@@ -136,10 +138,12 @@ def get_vf_status(*, conn) -> List[Tuple]:
     	    ) t1 
     	    order by start_dttm
         """)
-    return cursor.fetchall()
+    result = cursor.fetchall()
+    cursor.close()
+    return result
 
 
-def get_current_errors(*, conn) -> List[Tuple]:
+def get_current_errors(*, conn, **kwargs) -> List[Tuple]:
     """
     Получение всех процессов со статусом 'E' из Базы данных
     :param conn: Используемое подключение к БД
@@ -152,10 +156,12 @@ def get_current_errors(*, conn) -> List[Tuple]:
         from etl_cfg.cfg_status_table
         where status_cd='E'
     """)
-    return cursor.fetchall()
+    result = cursor.fetchall()
+    cursor.close()
+    return result
 
 
-def close_resource_status(*, resource_nm, conn):
+def close_resource_status(*, resource_nm, conn, **kwargs):
     """
     Закрытие ресурса с ошибкой
     :param resource_nm: Наименование ресурса
@@ -169,6 +175,7 @@ def close_resource_status(*, resource_nm, conn):
         f"where status_cd='E' "
         f"      and resource_nm = '{resource_nm}'")
     conn.commit()
+    cursor.close()
 
 
 def update_resource_status(*, resource_nm, conn):
@@ -185,3 +192,18 @@ def update_resource_status(*, resource_nm, conn):
         f"where status_cd='E' "
         f"      and resource_nm = '{resource_nm}'")
     conn.commit()
+    cursor.close()
+
+
+def delete_resource_status(*, resource_nm, conn):
+    """
+    Удаление ресурса из таблицы etl_cfg.etl_status_table
+    :param resource_nm: Наименование ресурса
+    :param conn: Используемое подключение к БД
+    :return: None
+    """
+    cursor = conn.cursor()
+    cursor.execute(f"delete from etl_cfg.cfg_status_table"
+                   f" where resource_nm = '{resource_nm}'")
+    conn.commit()
+    cursor.close()

@@ -26,7 +26,7 @@ def get_errors_list_nms() -> List[str]:
     Получение списка упавших процессов
     :return: Список строк с названиеми процессов
     """
-    query_results = get_current_errors(connection)
+    query_results = get_current_errors(conn=connection)
     return [tup[0] for tup in query_results]
 
 
