@@ -49,3 +49,5 @@ async def get_keyboard(lst, type_nm=None):
         for obj in lst:
             markup.insert(InlineKeyboardButton(obj, callback_data=f"{obj}+{type_nm}" if type_nm else obj))
         return markup
+    else:
+        return None

@@ -3,6 +3,8 @@ from decorators import on_connection
 from main import db_info
 
 
+def serialize(query):
+    return
 
 @on_connection(db_info=db_info)
 def get_error_stats(*, conn, **kwargs) -> List[Tuple]:
@@ -211,3 +213,28 @@ def delete_resource_status(*, resource_nm, conn):
                    f" where resource_nm = '{resource_nm}'")
     conn.commit()
     cursor.close()
+
+
+def get_resources_list(*, module_nm, conn) -> List[str]:
+    cursor = conn.cursor()
+    cursor.execute(
+        f"select distinct lower(resource_nm) from etl_cfg.cfg_resource where lower(module_nm) = '{module_nm}'")
+    query_results = cursor.fetchall()
+    cursor.close()
+    if len(query_results) > 0:
+        list_results = ', '.join([', '.join(map(str, x)) for x in query_results]).split((', '))
+    elif len(query_results) == 0:
+        list_results = ''
+    return list_results
+
+
+def get_modules_list(*, conn) -> List[str]:
+    cursor = conn.cursor()
+    cursor.execute("select distinct lower(module_nm) from etl_cfg.cfg_resource")
+    query_results = cursor.fetchall()
+    cursor.close()
+    if len(query_results) > 0:
+        list_results = ', '.join([', '.join(map(str, x)) for x in query_results]).split((', '))
+    elif len(query_results) == 0:
+        list_results = ''
+    return list_results

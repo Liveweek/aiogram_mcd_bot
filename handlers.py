@@ -7,10 +7,9 @@ from config import button_request_errors_text, button_request_status_text, \
     button_request_rtp_text, button_request_vf_text, button_show_errors, \
     button_show_resources
 
-from bot_actions import generate_help_list, get_errors_list_nms, errors_keyboard
+from bot_actions import generate_help_list, get_errors_list_nms, errors_keyboard, get_keyboard
 from db_actions import get_error_stats, get_status, get_rtp_status, get_vf_status, get_current_errors, \
-    update_resource_status, close_resource_status
-
+    update_resource_status, close_resource_status, get_modules_list, get_resources_list, delete_resource_status
 
 # TODO: Восстановить старую архитектуру проекта, вынести бизнес-логику по модулям
 # TODO: Написать систему защиты от "незнакомцев" в виде декоратора (и применить его к БЛ)
@@ -67,7 +66,6 @@ async def show_errors(message: Message):
 
 @dp.message_handler(Text(equals=button_request_status_text))
 async def show_status(message: Message):
-
     await message.answer(
         text='Я отправлю реквест в базу данных для извлечения свежей статистики в системе за сегодня (ограничение = '
              '30 записей), ждите!')
@@ -114,17 +112,18 @@ async def show_vf(message: Message):
         text=text if text else 'Отсутствуют свежие данные по долгосрочному процессу прогнозирования.'
     )
 
+
 # WARNING: вы остановились здесь
 
 
 def open_resource_status(resource_nm):
     connection = psycopg2.connect(database=db_info.get('NAME'),
-                      user=db_info.get('USER'),
-                      password=db_info.get('PASSWORD'),
-                      host=db_info.get('HOST'),
-                      port=db_info.get('PORT'))
+                                  user=db_info.get('USER'),
+                                  password=db_info.get('PASSWORD'),
+                                  host=db_info.get('HOST'),
+                                  port=db_info.get('PORT'))
     cursor = connection.cursor()
-    #print('resource_nm=====', resource_nm)
+    # print('resource_nm=====', resource_nm)
     cursor.execute(
         f"select max(t1.ex_flg) as max_ex_flg from (select 0 as ex_flg union ( select 1012 as ex_flg from etl_cfg.cfg_status_table	where lower(resource_nm) = '{resource_nm}')) t1")
     # Если ресурс УЖЕ имеется в статусной таблице за сегодня (значит, зависимые ресурсы также имеются в статусе "L"
@@ -132,7 +131,6 @@ def open_resource_status(resource_nm):
     query_rc = cursor.fetchall()
     query_list = ', '.join([', '.join(map(str, x)) for x in query_rc]).split((', '))
     if len(query_list[0]) >= 4:
-        #print('Ветка, если полученный ответ не типа НонТайп')
         # Если ресурс уже есть в системе, то надо выкинуть предупреждение и другую клавиатуру - перезапускать ли
         # в этом случае. Если да: Удаляем текущий ресурс из таблицы статусов
         cursor.execute(f"delete from etl_cfg.cfg_status_table where lower(resource_nm) = '{resource_nm}'")
@@ -141,16 +139,12 @@ def open_resource_status(resource_nm):
             f"select replace(rule_cond, '/A','') from etl_cfg.cfg_schedule_rule where lower(rule_nm) = '{resource_nm}'")
         query_results = cursor.fetchall()
         if len(query_results) > 0:
-            #print('Ветка, если полученный ответ для определения зависимых ресурсов не нулевой')
             list_results = ', '.join([', '.join(map(str, x)) for x in query_results]).split((', '))
-            #print('зависимые ресурсы: ', list_results)
             i = 1
             for obj in list_results:
                 i = i + 1
-                #print(f'зависимый ресурс #{i}: ', obj)
                 # Обновляем зависимый ресурс в "А" для запуска главного ресурса
                 cursor.execute(f"update etl_cfg.cfg_status_table set status_cd = 'A' where resource_nm = '{obj}'")
-                #print(f"Статус ресурса {obj} обновлен в 'A'.")
         else:
             print(f'Для указанного ресурса {resource_nm} нет правила запуска! Обратитесь к администратору')
         connection.commit()
@@ -160,43 +154,30 @@ def open_resource_status(resource_nm):
         cursor.execute(
             f"select replace(rule_cond, '/A','') from etl_cfg.cfg_schedule_rule where lower(rule_nm) = '{resource_nm}'")
         query_results = cursor.fetchall()
-        #print(query_results)
         if len(query_results) > 0:
-            #print('Ветка, если есть зависимые ресурсы')
             list_results = ', '.join([', '.join(map(str, x)) for x in query_results]).split((' '))
-            #print('list_results ===== ', list_results)
             i = 0
             for obj in list_results:
                 i = i + 1
-                #print(f'зависимый ресурс #{i}: ', obj)
                 # Проверка на существование ресурса в таблице статусов за сегодня
                 cursor.execute(
-                        f"select max(t1.ex_flg) as max_ex_flg from (select 0 as ex_flg union ( select 1012 as ex_flg from etl_cfg.cfg_status_table	where lower(resource_nm) = '{obj}')) t1")
-                #cursor.execute(f"select 1012 as ex_flg from etl_cfg.cfg_status_table where resource_nm = '{obj}'")
+                    f"select max(t1.ex_flg) as max_ex_flg from (select 0 as ex_flg union ( select 1012 as ex_flg from etl_cfg.cfg_status_table	where lower(resource_nm) = '{obj}')) t1")
                 query_rc = cursor.fetchall()
                 query_list_inter = ', '.join([', '.join(map(str, x)) for x in query_rc]).split((', '))
-                # print('type=',type(query_list_inter))
-                # print('Value',query_list_inter)
                 if len(query_list_inter[0]) >= 4:
                     # Если ресурс УЖЕ имеется в статусной таблице за сегодня (значит, зависимые ресурсы также имеются в статусе "L"
                     if int(query_list_inter[0]) == 1:
-                        #print(
+                        # print(
                         #    f"Зависимый ресурс {obj} уже имеется в таблице статусов за сегодня. Ожидайте регламентного запуска процесса (каждые 15 мин).")
                         cursor.execute(
                             f"update etl_cfg.cfg_status_table set status_cd = 'A' where resource_nm = '{obj}' and status_cd not in ('P', 'E')")
-                        #print(
-                        #    f"Статус зависимого ресурса {obj} обновлен в 'A', на случай, если его текущий статус был закрыт вручную.")
                 elif len(query_list_inter[0]) <= 1:
                     cursor.execute(f"select resource_id from  etl_cfg.cfg_resource where lower(resource_nm) = '{obj}'")
                     resource_id = cursor.fetchall()
                     resource_id_fmt = ', '.join([', '.join(map(str, x)) for x in resource_id]).split((', '))
-                    # print('======================',resource_id_fmt)
-                    # print('type of first object in a list ===', type(int(resource_id_fmt[0].split('.')[0])))
-                    # print('res_id====',int(resource_id_fmt[0].split('.')[0]))
                     postgres_insert_query = """ INSERT INTO etl_cfg.cfg_status_table(resource_id, resource_nm, status_cd, processed_dttm, retries_cnt) 	VALUES (%s,%s,%s,%s,%s)"""
                     record_to_insert = (int(resource_id_fmt[0].split('.')[0]), obj, 'A', 'now()', 0)
                     cursor.execute(postgres_insert_query, record_to_insert)
-                    #print(f"Добавлена новая строка - статус ресурс {obj} = 'A'")
                 else:
                     pass
         connection.commit()
@@ -208,10 +189,10 @@ def open_resource_status(resource_nm):
 
 def show_resource_status(resource_nm):
     connection = psycopg2.connect(database=db_info.get('NAME'),
-                      user=db_info.get('USER'),
-                      password=db_info.get('PASSWORD'),
-                      host=db_info.get('HOST'),
-                      port=db_info.get('PORT'))
+                                  user=db_info.get('USER'),
+                                  password=db_info.get('PASSWORD'),
+                                  host=db_info.get('HOST'),
+                                  port=db_info.get('PORT'))
     cursor = connection.cursor()
     # проверка на существование статуса для указанного ресурса
     cursor.execute(f"select 1012 as ex_flg from etl_cfg.cfg_status_table where lower(resource_nm) = '{resource_nm}'")
@@ -228,85 +209,34 @@ def show_resource_status(resource_nm):
     connection.close()
 
 
-def get_modules_list() -> List[str]:
-    connection = psycopg2.connect(database=db_info.get('NAME'),
-                      user=db_info.get('USER'),
-                      password=db_info.get('PASSWORD'),
-                      host=db_info.get('HOST'),
-                      port=db_info.get('PORT'))
-    cursor = connection.cursor()
-    cursor.execute("select distinct lower(module_nm) from etl_cfg.cfg_resource")
-    query_results = cursor.fetchall()
-    cursor.close()
-    connection.close()
-    if len(query_results) > 0:
-        list_results = ', '.join([', '.join(map(str, x)) for x in query_results]).split((', '))
-    elif len(query_results) == 0:
-        list_results = ''
-    return list_results
-
-
-def get_resources_list(module_nm) -> List[str]:
-    connection = psycopg2.connect(database=db_info.get('NAME'),
-                      user=db_info.get('USER'),
-                      password=db_info.get('PASSWORD'),
-                      host=db_info.get('HOST'),
-                      port=db_info.get('PORT'))
-    cursor = connection.cursor()
-    cursor.execute(
-        f"select distinct lower(resource_nm) from etl_cfg.cfg_resource where lower(module_nm) = '{module_nm}'")
-    query_results = cursor.fetchall()
-    cursor.close()
-    connection.close()
-    if len(query_results) > 0:
-        list_results = ', '.join([', '.join(map(str, x)) for x in query_results]).split((', '))
-    elif len(query_results) == 0:
-        list_results = ''
-    return list_results
-
-
 @dp.message_handler(Text(equals=button_show_resources))
 async def show_modules(message: Message):
-    if len(get_modules_list()) > 0:
-        markup = InlineKeyboardMarkup()
-        await bot.send_message(
-            chat_id=message.from_user.id,
-            text='<b>Выберите модуль: </b>\n',
-            reply_markup=await get_keyboard(get_modules_list())
-        )
-    elif len(get_modules_list()) == 0:
-        await bot.send_message(
-            chat_id=message.from_user.id,
-            text='Модули отсутствуют.\n\n<b>Сообщите администратору!</b>'
-        )
+    modules = get_modules_list()
+    await bot.send_message(
+        chat_id=message.from_user.id,
+        text='<b>Выберите модуль: </b>\n' if modules else 'Модули отсутствуют.\n\n<b>Сообщите администратору!</b>',
+        reply_markup=await get_keyboard(modules))
 
 
 @dp.message_handler(Text(equals=button_show_errors))
 async def show_errors(message: Message):
-    if len(get_errors_list_nms()) > 0:
-        markup = InlineKeyboardMarkup()
-        await bot.send_message(
-            chat_id=message.from_user.id,
-            text='Процессы, завершившиеся с ошибками: \n',
-            reply_markup=await errors_keyboard()
-        )
-    elif len(get_errors_list_nms()) == 0:
-        await bot.send_message(
-            chat_id=message.from_user.id,
-            text='Отсутствуют процессы, завершившиеся с ошибками. \n'
-        )
+    errors_list = get_errors_list_nms()
+    await bot.send_message(
+        chat_id=message.from_user.id,
+        text='Процессы, завершившиеся с ошибками: \n' if errors_list \
+            else 'Отсутствуют процессы, завершившиеся с ошибками. \n',
+        reply_markup=await errors_keyboard()
+    )
 
 
 @dp.callback_query_handler(lambda call: True)
 async def callback_inline(call):
     call_data = call.data
-    #print(call_data)
     if call.data in get_errors_list_nms():
         markup = InlineKeyboardMarkup()
         markup.add(InlineKeyboardButton('Перезапустить', callback_data=f'{call.data}+res_act_rerun'))
         markup.add(InlineKeyboardButton('Закрыть', callback_data=f'{call.data}+res_act_close'))
         markup.add(InlineKeyboardButton('Пропустить', callback_data=f'{call.data}+res_act_skip'))
-        # заряжаем новую
         await bot.edit_message_text(
             chat_id=call.from_user.id,
             message_id=call.message.message_id,
@@ -321,8 +251,6 @@ async def callback_inline(call):
             reply_markup=await get_keyboard(get_resources_list(call.data), type_nm='single_resource')
         )
     elif call_data.find('+') != -1:
-        #print(f'CALLBACK={call_data}')
-        #print(f"Результат поиска плюсика = {call_data.find('+')}")
         if call_data.split('+')[1] == 'res_act_rerun':
             update_resource_status(call_data.split('+')[0])
             if len(get_errors_list_nms()) > 0:
@@ -384,15 +312,16 @@ async def callback_inline(call):
         # Блок обработчика для управления отдельными процессами
         elif call_data.split('+')[1] == 'single_resource':
             markup = InlineKeyboardMarkup(row_width=2)
-            markup.add(InlineKeyboardButton('Запустить', callback_data=f"{call_data.split('+')[0]}+single_res_act_run"),
-                       (
-                           InlineKeyboardButton('Узнать статус',
-                                                callback_data=f"{call_data.split('+')[0]}+single_res_act_status")),
-                       InlineKeyboardButton('Закрыть', callback_data=f"{call_data.split('+')[0]}+single_res_act_close"),
-                       InlineKeyboardButton('Удалить', callback_data=f"{call_data.split('+')[0]}+single_res_act_delete"),
-                       InlineKeyboardButton('Пропустить',
-                                            callback_data=f"{call_data.split('+')[0]}+single_res_act_skip")
-                       )
+            markup.add([InlineKeyboardButton('Запустить',
+                                            callback_data=f"{call_data.split('+')[0]}+single_res_act_run"),
+                        InlineKeyboardButton('Узнать статус',
+                                            callback_data=f"{call_data.split('+')[0]}+single_res_act_status"),
+                        InlineKeyboardButton('Закрыть',
+                                             callback_data=f"{call_data.split('+')[0]}+single_res_act_close"),
+                        InlineKeyboardButton('Удалить',
+                                            callback_data=f"{call_data.split('+')[0]}+single_res_act_delete"),
+                        InlineKeyboardButton('Пропустить',
+                                            callback_data=f"{call_data.split('+')[0]}+single_res_act_skip")])
             # заряжаем новую
             await bot.edit_message_text(
                 chat_id=call.from_user.id,
@@ -448,14 +377,7 @@ async def callback_inline(call):
                      f"<b>Выберите модуль: </b>\n",
                 reply_markup=await get_keyboard(get_modules_list())
             )
-        else:
-            #print(f'УУУУУХ Я ХЗ ЧЕ ЗА КОМАНДА ПАЦАНЫ!!!!!!!')
-            await bot.send_message(
-                chat_id=call.from_user.id,
-                text=f'УУУУУХ Я ХЗ ЧЕ ЗА КОМАНДА ПАЦАНЫ!!!!!!! callback={call_data}\n'
-            )
     else:
-        #print(f'УУУУУХ Я ХЗ ЧЕ ЗА КОМАНДА ПАЦАНЫ!!!!!!!')
         await bot.send_message(
             chat_id=call.from_user.id,
             text='УУУУУХ Я ХЗ ЧЕ ЗА КОМАНДА ПАЦАНЫ!!!!!!! callback={call_data}\n'
