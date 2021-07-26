@@ -1,6 +1,10 @@
 from typing import List, Tuple
+from decorators import on_connection
+from main import db_info
 
 
+
+@on_connection(db_info=db_info)
 def get_error_stats(*, conn, **kwargs) -> List[Tuple]:
     """
     Получение статуса ошибок из базы данных

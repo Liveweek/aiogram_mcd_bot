@@ -11,11 +11,13 @@ from bot_actions import generate_help_list, get_errors_list_nms, errors_keyboard
 from db_actions import get_error_stats, get_status, get_rtp_status, get_vf_status, get_current_errors, \
     update_resource_status, close_resource_status
 
+
+# TODO: Восстановить старую архитектуру проекта, вынести бизнес-логику по модулям
 # TODO: Написать систему защиты от "незнакомцев" в виде декоратора (и применить его к БЛ)
 # TODO: Вынести системные параметры подключения и токенов в переменные окружения
 # TODO: Кнопка с волками
 
-reply_markup = ReplyKeyboardMarkup(
+REPLY_MARKUP = ReplyKeyboardMarkup(
     keyboard=[
         [
             KeyboardButton(text=button_show_resources),
@@ -30,304 +32,89 @@ reply_markup = ReplyKeyboardMarkup(
 )
 
 
-async def send_to_admin(dp):
-    await bot.send_message(chat_id=ADMIN_ID, text='Бот запущен', reply_markup=reply_markup)
-
-
 @dp.message_handler(commands=['start'])
 async def show_help(message: Message):
     await bot.send_message(
         chat_id=message.from_user.id,
         text='Бот запущен',
-        reply_markup=reply_markup
+        reply_markup=REPLY_MARKUP
     )
 
 
 @dp.message_handler(commands=['help'])
 async def show_help(message: Message):
-    txt = '<b>HELP:</b>\n'
-    txt += '<b>/start</b> Ну че, народ, погнали?!\n'
-    # txt += '<b>/request_rtp</b> Показать последнюю сводку по краткосрочному прогнозу\n'
-    # txt += '<b>/request_vf</b> Показать последюю сводку по долгосрочному прогнозу\n'
-    # txt += '<b>/request</b> Показать ошибки с начала цикла (17:00)\n'
-    txt += '<b>INFO</b> Бот для получения запросов к конфигурационной базе данных PG проекта Macdonalds\n'
-    txt += '<b>Жми кнопки ниже</b>\n'
-    # await message.answer(text=txt)
     await bot.send_message(
         chat_id=message.from_user.id,
-        text=txt,
-        reply_markup=reply_markup
+        text=generate_help_list(),
+        reply_markup=REPLY_MARKUP
     )
 
 
 @dp.message_handler(Text(equals=button_request_errors_text))
 async def show_errors(message: Message):
-    connection = psycopg2.connect(database=db_info.get('NAME'),
-                      user=db_info.get('USER'),
-                      password=db_info.get('PASSWORD'),
-                      host=db_info.get('HOST'),
-                      port=db_info.get('PORT'))
-    cursor = connection.cursor()
     await message.answer(text='Я отправил реквест в базу данных для извлечения статистики ошибок в системе за '
                               'сегодня, ждите!')
-    cursor.execute(""" select t1.* from 
-        (
-        select cast(lower(process_nm) as varchar(32)) as process_nm,
-        				case when status_description='' and end_dttm is null then 'In progress' 
-    					when status_description='' and end_dttm is not null then 'Success' 
-        				else cast(status_description as varchar(50)) 
-        				end as status_description
-        				,cast(start_dttm + interval'8 hour' as timestamp (0)) as start_dttm
-        				, cast(end_dttm + interval'8 hour' as timestamp (0)) as end_dttm
-        				, case when end_dttm is null then cast(current_timestamp as timestamp (0)) - cast(start_dttm as timestamp (0)) 
-        					else cast(end_dttm as timestamp (0)) - cast(start_dttm as timestamp (0))
-        					end as exec_tm
-        				, cast(user_nm as varchar(15)) as user
-        				from etl_cfg.cfg_log_event 
-        				where cast(current_date as timestamp (0)) - interval'8 hour' <= start_dttm + interval'8 hour'
-        				and status_cd=1
-        				order by start_dttm desc 
-        				limit 40
-        				) t1 
-    			order by start_dttm
-        				""")
 
-    query_results = cursor.fetchall()
-    cursor.close()
-    connection.close()
+    query_results = get_current_errors()
+
     text = '\n\n'.join([', '.join(map(str, x)) for x in query_results])
-    if len(text) > 0:
-        await bot.send_message(
-            chat_id=message.from_user.id,
-            text=text
-        )
-    elif len(text) == 0:
-        await bot.send_message(
-            chat_id=message.from_user.id,
-            text='Отсутствуют свежие данные по ошибкам в системе.'
-        )
+
+    await bot.send_message(
+        chat_id=message.from_user.id,
+        text=text if text else 'Отсутствуют свежие данные по ошибкам в системе.'
+    )
 
 
 @dp.message_handler(Text(equals=button_request_status_text))
-async def show_errors(message: Message):
-    connection = psycopg2.connect(database=db_info.get('NAME'),
-                      user=db_info.get('USER'),
-                      password=db_info.get('PASSWORD'),
-                      host=db_info.get('HOST'),
-                      port=db_info.get('PORT'))
-    cursor = connection.cursor()
+async def show_status(message: Message):
+
     await message.answer(
         text='Я отправлю реквест в базу данных для извлечения свежей статистики в системе за сегодня (ограничение = '
              '30 записей), ждите!')
 
-    cursor.execute(""" select t1.* from 
-           (
-           select cast(lower(process_nm) as varchar(32)) as process_nm,
-           				case when status_description='' and end_dttm is null then 'In progress' 
-       					when status_description='' and end_dttm is not null then 'Success' 
-           				else cast(status_description as varchar(50)) 
-           				end as status_description
-           				,cast(start_dttm + interval'8 hour' as timestamp (0)) as start_dttm
-           				, cast(end_dttm + interval'8 hour' as timestamp (0)) as end_dttm
-           				, case when end_dttm is null then cast(current_timestamp as timestamp (0)) - cast(start_dttm as timestamp (0)) 
-           					else cast(end_dttm as timestamp (0)) - cast(start_dttm as timestamp (0))
-           					end as exec_tm
-           				, cast(user_nm as varchar(15)) as user
-           				from etl_cfg.cfg_log_event 
-           				where cast(current_date as timestamp (0)) - interval'8 hour' <= start_dttm + interval'8 hour'
-           				order by start_dttm desc 
-           				limit 40
-           				) t1 
-       			order by start_dttm
-           				""")
-    query_results = cursor.fetchall()
-    cursor.close()
-    connection.close()
-    if len(query_results) > 0:
-        text = '\n\n'.join([', '.join(map(str, x)) for x in query_results])
-    elif len(query_results) == 0:
-        text = 'Отсутствуют свежие данные по общей статистике системы.'
+    query_results = get_status()
+
+    text = '\n\n'.join([', '.join(map(str, x)) for x in query_results])
+
     await bot.send_message(
         chat_id=message.from_user.id,
-        text=text
+        text=text if text else 'Отсутствуют свежие данные по общей статистике системы.'
     )
 
 
 @dp.message_handler(Text(equals=button_request_rtp_text))
-async def show_errors(message: Message):
-    connection = psycopg2.connect(database=db_info.get('NAME'),
-                      user=db_info.get('USER'),
-                      password=db_info.get('PASSWORD'),
-                      host=db_info.get('HOST'),
-                      port=db_info.get('PORT'))
-    cursor = connection.cursor()
+async def show_rtp(message: Message):
     await message.answer(
         text='Я отправлю реквест в базу данных для извлечения свежей статистики по краткосрочному процессу за сегодня '
              '(ограничение = '
              '30 записей), ждите!')
-    cursor.execute("""select t1.* from
-    (
-    select cast(lower(process_nm) as varchar(32)) as process_nm,
-        				case when status_description='' and end_dttm is null then 'In progress' 
-    					when status_description='' and end_dttm is not null then 'Success' 
-        				else cast(status_description as varchar(50)) 
-        				end as status_description
-        				,cast(start_dttm + interval'8 hour' as timestamp (0)) as start_dttm
-        				, cast(end_dttm + interval'8 hour' as timestamp (0)) as end_dttm
-        				, case when end_dttm is null then cast(current_timestamp as timestamp (0)) - cast(start_dttm as timestamp (0)) 
-        					else cast(end_dttm as timestamp (0)) - cast(start_dttm as timestamp (0))
-        					end as exec_tm
-        				, cast(user_nm as varchar(15)) as user
-        				from etl_cfg.cfg_log_event 
-        				where cast(current_date as timestamp (0)) - interval'8 hour' <= start_dttm + interval'8 hour'
-     					and lower(process_nm) like 'rtp_%'
-        				order by start_dttm desc 
-        				limit 30
-    	) t1 order by start_dttm """)
-    query_results = cursor.fetchall()
-    cursor.close()
-    connection.close()
+
+    query_results = get_rtp_status()
+
     text = '\n\n'.join([', '.join(map(str, x)) for x in query_results])
-    if len(text) > 0:
-        await bot.send_message(
-            chat_id=message.from_user.id,
-            text=text
-        )
-    elif len(text) == 0:
-        await bot.send_message(
-            chat_id=message.from_user.id,
-            text='Отсутствуют свежие данные по краткосрочному процессу прогнозирования.'
-        )
+    await bot.send_message(
+        chat_id=message.from_user.id,
+        text=text if text else 'Отсутствуют свежие данные по краткосрочному процессу прогнозирования.'
+    )
 
 
 @dp.message_handler(Text(equals=button_request_vf_text))
-async def show_errors(message: Message):
-    connection = psycopg2.connect(database=db_info.get('NAME'),
-                      user=db_info.get('USER'),
-                      password=db_info.get('PASSWORD'),
-                      host=db_info.get('HOST'),
-                      port=db_info.get('PORT'))
-    cursor = connection.cursor()
+async def show_vf(message: Message):
+    query_results = get_vf_status()
     await message.answer(
         text='Я отправлю реквест в базу данных для извлечения свежей статистики по краткосрочному процессу '
              'прогнозирования за сегодня '
              '(ограничение = '
              '30 записей), ждите!')
-    cursor.execute("""select t1.* from
-(
-select cast(lower(process_nm) as varchar(32)) as process_nm,
-    				case when status_description='' and end_dttm is null then 'In progress' 
-					when status_description='' and end_dttm is not null then 'Success' 
-    				else cast(status_description as varchar(50)) 
-    				end as status_description
-    				,cast(start_dttm + interval'8 hour' as timestamp (0)) as start_dttm
-    				, cast(end_dttm + interval'8 hour' as timestamp (0)) as end_dttm
-    				, case when end_dttm is null then cast(current_timestamp as timestamp (0)) - cast(start_dttm as timestamp (0)) 
-    					else cast(end_dttm as timestamp (0)) - cast(start_dttm as timestamp (0))
-    					end as exec_tm
-    				, cast(user_nm as varchar(15)) as user
-    				from etl_cfg.cfg_log_event 
-    				where cast(current_date as timestamp (0)) - interval'8 hour' <= start_dttm + interval'8 hour'
- 					and lower(process_nm) like 'vf_%'
-    				order by start_dttm desc 
-    				limit 30
-	) t1 order by start_dttm """)
-    query_results = cursor.fetchall()
-    cursor.close()
-    connection.close()
+
     text = '\n\n'.join([', '.join(map(str, x)) for x in query_results])
-    if len(text) > 0:
-        await bot.send_message(
-            chat_id=message.from_user.id,
-            text=text
-        )
-    elif len(text) == 0:
-        await bot.send_message(
-            chat_id=message.from_user.id,
-            text='Отсутствуют свежие данные по долгосрочному процессу прогнозирования.'
-        )
 
+    await bot.send_message(
+        chat_id=message.from_user.id,
+        text=text if text else 'Отсутствуют свежие данные по долгосрочному процессу прогнозирования.'
+    )
 
-def get_errors_list_nms() -> List[str]:
-    connection = psycopg2.connect(database=db_info.get('NAME'),
-                      user=db_info.get('USER'),
-                      password=db_info.get('PASSWORD'),
-                      host=db_info.get('HOST'),
-                      port=db_info.get('PORT'))
-    cursor = connection.cursor()
-    cursor.execute("select resource_nm\n"
-                   "from etl_cfg.cfg_status_table\n"
-                   "where status_cd='E'\n")
-    query_results = cursor.fetchall()
-    cursor.close()
-    connection.close()
-    if len(query_results) > 0:
-        list_results = ', '.join([', '.join(map(str, x)) for x in query_results]).split((', '))
-    elif len(query_results) == 0:
-        list_results = ''
-    return list_results
-
-
-async def errors_keyboard():
-    markup = InlineKeyboardMarkup(row_width=2)
-    err_processes = get_errors_list_nms()
-    if len(get_errors_list_nms()) > 0:
-        for resource in err_processes:
-            markup.add(InlineKeyboardButton(resource, callback_data=resource))
-        return markup
-
-
-async def get_keyboard(list, type_nm=''):
-    markup = InlineKeyboardMarkup(row_width=2)
-    #print(f'type_nm = {type_nm}')
-    if len(list) > 0:
-        for obj in list:
-            #print(obj)
-            if len(type_nm) > 0:
-                markup.insert(InlineKeyboardButton(obj, callback_data=f"{obj}+{type_nm}"))
-            elif len(type_nm) == 0:
-                markup.insert(InlineKeyboardButton(obj, callback_data=obj))
-        return markup
-
-
-def close_resource_status(resource_nm):
-    connection = psycopg2.connect(database=db_info.get('NAME'),
-                      user=db_info.get('USER'),
-                      password=db_info.get('PASSWORD'),
-                      host=db_info.get('HOST'),
-                      port=db_info.get('PORT'))
-    cursor = connection.cursor()
-    cursor.execute(
-        f"update etl_cfg.cfg_status_table set status_cd='C' where status_cd='E' and resource_nm = '{resource_nm}'")
-    connection.commit()
-    cursor.close()
-    connection.close()
-
-def delete_resource_status(resource_nm):
-    connection = psycopg2.connect(database=db_info.get('NAME'),
-                      user=db_info.get('USER'),
-                      password=db_info.get('PASSWORD'),
-                      host=db_info.get('HOST'),
-                      port=db_info.get('PORT'))
-    cursor = connection.cursor()
-    cursor.execute(
-        f"delete from etl_cfg.cfg_status_table where resource_nm = '{resource_nm}'")
-    connection.commit()
-    cursor.close()
-    connection.close()
-
-def update_resource_status(resource_nm):
-    connection = psycopg2.connect(database=db_info.get('NAME'),
-                      user=db_info.get('USER'),
-                      password=db_info.get('PASSWORD'),
-                      host=db_info.get('HOST'),
-                      port=db_info.get('PORT'))
-    cursor = connection.cursor()
-    cursor.execute(
-        f"update etl_cfg.cfg_status_table set status_cd='A' where status_cd='E' and resource_nm = '{resource_nm}'")
-    connection.commit()
-    cursor.close()
-    connection.close()
+# WARNING: вы остановились здесь
 
 
 def open_resource_status(resource_nm):

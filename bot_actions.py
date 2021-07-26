@@ -2,7 +2,6 @@ from typing import List, Optional
 
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
-from main import connection
 from db_actions import get_current_errors
 
 
@@ -26,7 +25,7 @@ def get_errors_list_nms() -> List[str]:
     Получение списка упавших процессов
     :return: Список строк с названиеми процессов
     """
-    query_results = get_current_errors(conn=connection)
+    query_results = get_current_errors()
     return [tup[0] for tup in query_results]
 
 
@@ -35,7 +34,7 @@ async def errors_keyboard() -> Optional[InlineKeyboardMarkup]:
     Создание встроенной клавиатуры со всеми упавшими процессами
     :return: InlineKeyboardMarkup с кнопка для каждого упавшего ресурса
     """
-    markup = InlineKeyboardMarkup()
+    markup = InlineKeyboardMarkup(row_width=2)
     err_processes = get_errors_list_nms()
     if err_processes:
         for resource in err_processes:
@@ -43,3 +42,10 @@ async def errors_keyboard() -> Optional[InlineKeyboardMarkup]:
         return markup
     return None
 
+
+async def get_keyboard(lst, type_nm=None):
+    markup = InlineKeyboardMarkup(row_width=2)
+    if lst:
+        for obj in lst:
+            markup.insert(InlineKeyboardButton(obj, callback_data=f"{obj}+{type_nm}" if type_nm else obj))
+        return markup
