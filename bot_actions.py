@@ -26,7 +26,7 @@ def get_errors_list_nms() -> List[str]:
     :return: Список строк с названиеми процессов
     """
     query_results = get_current_errors()
-    return [tup[0] for tup in query_results]
+    return [tup[0] for tup in query_results] if query_results else None
 
 
 async def errors_keyboard() -> Optional[InlineKeyboardMarkup]:
@@ -43,7 +43,13 @@ async def errors_keyboard() -> Optional[InlineKeyboardMarkup]:
     return None
 
 
-async def get_keyboard(lst, type_nm=None):
+async def get_keyboard(lst, type_nm=None) -> Optional[InlineKeyboardMarkup]:
+    """
+    Генерация клавиатуры из исписка с типом выполняемой команды
+    :param lst: Список ресурсов для отображения
+    :param type_nm: Тип исполняемой команды над ресурсом
+    :return: Встроенную в сообщение клавиатуру (Класс InlineKeyboardMarkup), опционально
+    """
     markup = InlineKeyboardMarkup(row_width=2)
     if lst:
         for obj in lst:

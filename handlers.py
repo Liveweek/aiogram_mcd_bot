@@ -2,17 +2,17 @@ from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton, Callback
 from aiogram.dispatcher.filters import Text
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
-from main import bot, dp, connection
+from main import bot, dp
 from config import button_request_errors_text, button_request_status_text, \
     button_request_rtp_text, button_request_vf_text, button_show_errors, \
     button_show_resources
 
 from bot_actions import generate_help_list, get_errors_list_nms, errors_keyboard, get_keyboard
 from db_actions import get_error_stats, get_status, get_rtp_status, get_vf_status, get_current_errors, \
-    update_resource_status, close_resource_status, get_modules_list, get_resources_list, delete_resource_status
+    update_resource_status, close_resource_status, get_modules_list, get_resources_list, delete_resource_status, \
+    open_resource_status, show_resource_status
 
 # TODO: Восстановить старую архитектуру проекта, вынести бизнес-логику по модулям
-# TODO: Написать систему защиты от "незнакомцев" в виде декоратора (и применить его к БЛ)
 # TODO: Вынести системные параметры подключения и токенов в переменные окружения
 # TODO: Кнопка с волками
 
@@ -155,80 +155,48 @@ async def callback_inline(call):
             chat_id=call.from_user.id,
             message_id=call.message.message_id,
             text=f"<b>Выберите ресурсы, доступные для модуля {call.data}: </b>\n",
-            reply_markup=await get_keyboard(get_resources_list(call.data), type_nm='single_resource')
+            reply_markup=await get_keyboard(get_resources_list(module_nm=call.data), type_nm='single_resource')
         )
     elif call_data.find('+') != -1:
         if call_data.split('+')[1] == 'res_act_rerun':
-            update_resource_status(call_data.split('+')[0])
-            if len(get_errors_list_nms()) > 0:
-                markup = InlineKeyboardMarkup()
-                await bot.edit_message_text(
-                    chat_id=call.from_user.id,
-                    message_id=call.message.message_id,
-                    text=f"<b>Статус процесса {call_data.split('+')[0]} был обновлен с 'E' на 'А'.</b>\n\nПроцессы, "
-                         f"завершившиеся с ошибками: \n",
-                    reply_markup=await errors_keyboard()
-                )
-            elif len(get_errors_list_nms()) == 0:
-                # Если ошибочный ресурсов нет, то убираем предыдущую клавиатуру
-                await bot.edit_message_text(
-                    chat_id=call.from_user.id,
-                    message_id=call.message.message_id,
-                    text=f"<b>Статус процесса {call_data.split('+')[0]} был обновлен с 'E' на "
-                         f"'А'.</b>\n\n<b>Отсутствуют процессы, завершившиеся с ошибками.</b>",
-                    reply_markup=''
-                )
+            update_resource_status(resource_nm=call_data.split('+')[0])
+            err_lst = get_errors_list_nms()
+            await bot.edit_message_text(
+                chat_id=call.from_user.id,
+                message_id=call.message.message_id,
+                text=f"<b>Статус процесса {call_data.split('+')[0]} был обновлен с 'E' на 'А'.</b>\n\n" + \
+                     "Процессы,завершившиеся с ошибками: \n" if err_lst else "<b>Отсутствуют процессы, завершившиеся с ошибками.</b>",
+                reply_markup=await errors_keyboard()
+            )
         elif call_data.split('+')[1] == 'res_act_close':
             close_resource_status(call_data.split('+')[0])
-            if len(get_errors_list_nms()) > 0:
-                markup = InlineKeyboardMarkup()
-                await bot.edit_message_text(
-                    chat_id=call.from_user.id,
-                    message_id=call.message.message_id,
-                    text=f"<b>Статус процесса {call_data.split('+')[0]} был обновлен с 'E' на 'С'.</b>\n\nПроцессы, "
-                         f"завершившиеся с ошибками: \n",
-                    reply_markup=await errors_keyboard()
-                )
-            elif len(get_errors_list_nms()) == 0:
-                await bot.edit_message_text(
-                    chat_id=call.from_user.id,
-                    message_id=call.message.message_id,
-                    text=f"<b>Статус процесса {call_data.split('+')[0]} был обновлен с 'E' на "
-                         f"'С'.</b>\n\n<b>Отсутствуют "
-                         f"процессы, завершившиеся с ошибками.</b>\n",
-                    reply_markup=await errors_keyboard()
-                )
+            err_lst = get_errors_list_nms()
+            await bot.edit_message_text(
+                chat_id=call.from_user.id,
+                message_id=call.message.message_id,
+                text=f"<b>Статус процесса {call_data.split('+')[0]} был обновлен с 'E' на 'С'.</b>\n\n" + \
+                    "Процессы,завершившиеся с ошибками: \n" if err_lst else "<b>Отсутствуют процессы, завершившиеся с ошибками.</b>",
+                reply_markup=await errors_keyboard()
+            )
         elif call_data.split('+')[1] == 'res_act_skip':
-            if len(get_errors_list_nms()) > 0:
-                markup = InlineKeyboardMarkup()
-                await bot.edit_message_text(
-                    chat_id=call.from_user.id,
-                    message_id=call.message.message_id,
-                    text=f"<b>Действий к ресурсу {call_data.split('+')[0]} не применялось.</b>\n\nПроцессы, "
-                         f"завершившиеся с ошибками: \n",
-                    reply_markup=await errors_keyboard()
-                )
-            elif len(get_errors_list_nms()) == 0:
-                await bot.edit_message_text(
-                    chat_id=call.from_user.id,
-                    message_id=call.message.message_id,
-                    text=f"<b>Действий к ресурсу {call_data.split('+')[0]} не применялось.</b>\n\n<b>Отсутствуют "
-                         f"процессы, завершившиеся с ошибками.</b>\n",
-                    reply_markup=await errors_keyboard()
-                )
+            err_lst = get_errors_list_nms()
+            await bot.edit_message_text(
+                chat_id=call.from_user.id,
+                message_id=call.message.message_id,
+                text=f"<b>Действий к ресурсу {call_data.split('+')[0]} не применялось.</b>\n\n" + \
+                     "Процессы,завершившиеся с ошибками: \n" if err_lst else "<b>Отсутствуют процессы, завершившиеся с ошибками.</b>",
+                reply_markup=await errors_keyboard()
+            )
         # Блок обработчика для управления отдельными процессами
         elif call_data.split('+')[1] == 'single_resource':
             markup = InlineKeyboardMarkup(row_width=2)
-            markup.add([InlineKeyboardButton('Запустить',
-                                            callback_data=f"{call_data.split('+')[0]}+single_res_act_run"),
-                        InlineKeyboardButton('Узнать статус',
-                                            callback_data=f"{call_data.split('+')[0]}+single_res_act_status"),
-                        InlineKeyboardButton('Закрыть',
-                                             callback_data=f"{call_data.split('+')[0]}+single_res_act_close"),
-                        InlineKeyboardButton('Удалить',
-                                            callback_data=f"{call_data.split('+')[0]}+single_res_act_delete"),
-                        InlineKeyboardButton('Пропустить',
-                                            callback_data=f"{call_data.split('+')[0]}+single_res_act_skip")])
+            markup.add([
+                InlineKeyboardButton('Запустить', callback_data=f"{call_data.split('+')[0]}+single_res_act_run"),
+                InlineKeyboardButton('Узнать статус', callback_data=f"{call_data.split('+')[0]}+single_res_act_status"),
+                InlineKeyboardButton('Закрыть', callback_data=f"{call_data.split('+')[0]}+single_res_act_close"),
+                InlineKeyboardButton('Удалить', callback_data=f"{call_data.split('+')[0]}+single_res_act_delete"),
+                InlineKeyboardButton('Пропустить', callback_data=f"{call_data.split('+')[0]}+single_res_act_skip")
+            ])
             # заряжаем новую
             await bot.edit_message_text(
                 chat_id=call.from_user.id,
@@ -237,7 +205,7 @@ async def callback_inline(call):
                 reply_markup=markup
             )
         elif call_data.split('+')[1] == 'single_res_act_run':
-            open_resource_status(call_data.split('+')[0])
+            open_resource_status(resource_nm=call_data.split('+')[0])
             await bot.edit_message_text(
                 chat_id=call.from_user.id,
                 message_id=call.message.message_id,
@@ -256,7 +224,7 @@ async def callback_inline(call):
                 reply_markup=await get_keyboard(get_modules_list())
             )
         elif call_data.split('+')[1] == 'single_res_act_close':
-            open_resource_status(call_data.split('+')[0])
+            close_resource_status(resource_nm=call_data.split('+')[0])
             await bot.edit_message_text(
                 chat_id=call.from_user.id,
                 message_id=call.message.message_id,
@@ -275,7 +243,7 @@ async def callback_inline(call):
                 reply_markup=await get_keyboard(get_modules_list())
             )
         elif call_data.split('+')[1] == 'single_res_act_delete':
-            delete_resource_status(call_data.split('+')[0])
+            delete_resource_status(resource_nm=call_data.split('+')[0])
             await bot.edit_message_text(
                 chat_id=call.from_user.id,
                 message_id=call.message.message_id,
