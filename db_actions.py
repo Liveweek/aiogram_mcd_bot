@@ -1,4 +1,7 @@
 from typing import List, Tuple
+
+import psycopg2
+
 from decorators import on_connection
 from main import db_info
 
@@ -29,10 +32,9 @@ def get_error_stats(*, conn, **kwargs) -> List[Tuple]:
             		end as exec_tm,
             		cast(user_nm as varchar(15)) as user
             	from etl_cfg.cfg_log_event 
-    			where cast(current_date as timestamp (0)) - interval'8 hour' <= start_dttm + interval'8 hour'
-            		    and status_cd=1
-            	order by start_dttm desc 
-    			limit 40
+    			where status_cd=1
+            	order by start_dttm desc
+            	limit 20 
             	) t1 
         	order by start_dttm
         """)
@@ -42,10 +44,15 @@ def get_error_stats(*, conn, **kwargs) -> List[Tuple]:
 @on_connection(db_info=db_info)
 def get_status(*, conn, **kwargs) -> List[Tuple]:
     """
-    Получение свежений информации о статусе процессов из базы данных
+    Получение свеженей информации о статусе процессов из базы данных
     :param conn: Используемое подключение к БД
     :return: Результат запроса в формате списка кортежей
     """
+    # conn = psycopg2.connect(database=db_info.get('NAME'),
+    #                               user=db_info.get('USER'),
+    #                               password=db_info.get('PASSWORD'),
+    #                               host=db_info.get('HOST'),
+    #                               port=db_info.get('PORT'))
     cursor = conn.cursor()
     cursor.execute("""
             select t1.* 
@@ -65,12 +72,14 @@ def get_status(*, conn, **kwargs) -> List[Tuple]:
                		end as exec_tm,
                		cast(user_nm as varchar(15)) as user
                from etl_cfg.cfg_log_event 
-               where cast(current_date as timestamp (0)) - interval'8 hour' <= start_dttm + interval'8 hour'
                order by start_dttm desc 
                limit 40
                ) t1 
            	order by start_dttm""")
-    return cursor.fetchall()
+    query_results = cursor.fetchall()
+    cursor.close()
+    # conn.close()
+    return query_results
 
 
 @on_connection(db_info=db_info)
@@ -99,8 +108,7 @@ def get_rtp_status(*, conn, **kwargs) -> List[Tuple]:
             		end as exec_tm,
             		cast(user_nm as varchar(15)) as user
             				from etl_cfg.cfg_log_event 
-            	where cast(current_date as timestamp (0)) - interval'8 hour' <= start_dttm + interval'8 hour'
-         			and lower(process_nm) like 'rtp_%'
+            	where lower(process_nm) like 'rtp_%'
             	order by start_dttm desc 
     			limit 30
         	) t1 
@@ -137,8 +145,7 @@ def get_vf_status(*, conn, **kwargs) -> List[Tuple]:
         			end as exec_tm,
         			cast(user_nm as varchar(15)) as user
         		from etl_cfg.cfg_log_event 
-        		where cast(current_date as timestamp (0)) - interval'8 hour' <= start_dttm + interval'8 hour'
-     			    and lower(process_nm) like 'vf_%'
+        		where lower(process_nm) like 'vf_%'
         		order by start_dttm desc 
         		limit 30
     	    ) t1 
@@ -268,9 +275,8 @@ def open_resource_status(*, resource_nm, conn, **kwargs) -> None:
     cursor = conn.cursor()
     # Удаляем ресурс из таблицы статусов
     cursor.execute(f"""
-        delete
-            from etl_cfg.cfg_status_table
-        where lover(resource_nm) = '{resource_nm}'
+        delete from etl_cfg.cfg_status_table
+        where lower(resource_nm) = '{resource_nm}'
     """)
     conn.commit()
 
@@ -290,7 +296,7 @@ def open_resource_status(*, resource_nm, conn, **kwargs) -> None:
                 from etl_cfg.cfg_status_table
                 where lower(resource_nm) = '{res}'
             """)
-            result = cursor.fetchone()[0]
+            result = cursor.fetchone()
             if result:
                 # Если ресурс есть в таблице статусов -> обновить
                 cursor.execute(f"""
@@ -312,7 +318,7 @@ def open_resource_status(*, resource_nm, conn, **kwargs) -> None:
 
                 cursor.execute(f"""
                     insert into etl_cfg.cfg_status_table(resource_id, resource_nm, status_cd, processed_dttm, retries_cnt)
-                    VALUES ({resource_id},{res},'A', now() ,0)
+                    VALUES ({resource_id},'{res}','A', now() ,0)
                 """)
                 conn.commit()
     cursor.close()

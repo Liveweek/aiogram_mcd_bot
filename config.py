@@ -1,7 +1,7 @@
-TG_TOKEN = "1812983746:AAFKyBKBVZRu7deeqdyYKCrtR51cIPB97AA"
-ADMIN_IDS = [
+TG_TOKEN = "1812983746:AAHgazPLl25vFJqpiGsgPMpdwp2xvq4-6zQ"
+ADMIN_IDS = {
 
-]
+}
 
 button_help_text = 'Помощь'
 button_request_errors_text = 'Errors'
