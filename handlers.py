@@ -13,7 +13,6 @@ from db_actions import get_error_stats, get_status, get_rtp_status, get_vf_statu
     update_resource_status, close_resource_status, get_modules_list, get_resources_list, delete_resource_status, \
     open_resource_status, show_resource_status
 
- # TODO: Вынести системные параметры подключения и токенов в переменные окружения
 
 REPLY_MARKUP_ADMIN = ReplyKeyboardMarkup(
     keyboard=[
