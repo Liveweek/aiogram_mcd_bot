@@ -253,7 +253,7 @@ def get_modules_list(*, conn, **kwargs) -> List[str]:
     cursor.execute("select distinct lower(module_nm) from etl_cfg.cfg_resource")
     query_results = cursor.fetchall()
     cursor.close()
-    return [tup[0] for tup in query_results] if query_results else None
+    return query_results
 
 
 @on_connection(db_info=db_info)
