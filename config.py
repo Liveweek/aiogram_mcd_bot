@@ -2,9 +2,11 @@ import os
 
 
 TG_TOKEN = os.getenv("TG_TOKEN")
+ADMIN_IDS = set(map(int, os.getenv("ADMIN_IDS").split()))
+"""
 ADMIN_IDS = {
     267173666
-}
+}"""
 
 button_help_text = 'Помощь'
 button_request_errors_text = 'Errors'
